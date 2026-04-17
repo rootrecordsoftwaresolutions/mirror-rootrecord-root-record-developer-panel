@@ -21,6 +21,13 @@ function Replace-First([string]$text, [string]$pattern, [string]$replacement) {
   return $regex.Replace($text, $replacement, 1)
 }
 
+function Invoke-Gh([string[]]$Args) {
+  & gh @Args
+  if ($LASTEXITCODE -ne 0) {
+    throw ("gh " + ($Args -join " ") + " failed with exit code " + $LASTEXITCODE)
+  }
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
@@ -57,7 +64,13 @@ Write-Host ""
 Write-Host "Committing and pushing..."
 git add -A
 git commit -m "Release v$newVersion" | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "git commit failed. Resolve commit issues and rerun."
+}
 git push origin main
+if ($LASTEXITCODE -ne 0) {
+  throw "git push failed. Resolve push issues and rerun."
+}
 
 $tag = "v$newVersion"
 $title = "Root Record Developer Panel $tag"
@@ -76,15 +89,22 @@ if ([string]::IsNullOrWhiteSpace($ReleaseNotes)) {
 
 Write-Host ""
 Write-Host "Publishing GitHub release $tag..."
-try {
-  gh release view $tag | Out-Null
-  gh release edit $tag --title $title --notes $ReleaseNotes
-  gh release upload $tag $installer --clobber
+$existing = $null
+& gh release view $tag --json url | Out-Null
+if ($LASTEXITCODE -eq 0) {
+  $existing = $true
 }
-catch {
-  gh release create $tag $installer --title $title --notes $ReleaseNotes
+
+if ($existing) {
+  Invoke-Gh @("release", "edit", $tag, "--title", $title, "--notes", $ReleaseNotes)
+  Invoke-Gh @("release", "upload", $tag, $installer, "--clobber")
+} else {
+  Invoke-Gh @("release", "create", $tag, $installer, "--title", $title, "--notes", $ReleaseNotes)
 }
 
 $releaseUrl = gh release view $tag --json url --jq ".url"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($releaseUrl)) {
+  throw "Release created/updated but URL lookup failed."
+}
 Write-Host ""
 Write-Host "Release complete: $releaseUrl"
