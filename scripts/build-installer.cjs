@@ -30,6 +30,7 @@ function runBuildWindows() {
 async function main() {
   await runBuildWindows();
   fs.rmSync(shortWorkRoot, { recursive: true, force: true });
+  fs.rmSync(installerOutDir, { recursive: true, force: true });
   fs.mkdirSync(shortWorkRoot, { recursive: true });
   fs.cpSync(packedDir, shortAppDir, { recursive: true });
   await createWindowsInstaller({
