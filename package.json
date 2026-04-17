@@ -1,6 +1,6 @@
 {
   "name": "root-record-developer-panel",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Developer panel for building, signing, and managing Root Record applications",
   "main": "src/main.js",
   "scripts": {
