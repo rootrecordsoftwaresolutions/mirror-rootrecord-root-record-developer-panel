@@ -51,9 +51,9 @@ function createWindow() {
     width: 1600,
     height: 1000,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
     title: 'Root Record Developer Panel'
   });
@@ -288,11 +288,18 @@ function createWindow() {
               <p style="color:#888;font-size:12px;max-width:900px;">Ensures this server has MySQL + cloudflared available so your other apps can connect to one stable data node.</p>
               <button class="btn success" onclick="installOpsRemoteDependencies()">Install/Upgrade Dependencies</button>
               <button class="btn" onclick="checkOpsRemoteDependencies()">Check Dependency Status</button>
+              <h3 style="margin-top:16px;">Reliability Dashboard</h3>
+              <p style="color:#888;font-size:12px;max-width:900px;">Checks service health, disk availability, and backup footprint for production-style operations.</p>
+              <button class="btn" onclick="refreshOpsReliability()">Refresh Reliability</button>
+              <div id="ops-reliability-status" class="file-list">No reliability checks run yet.</div>
               <h3 style="margin-top:16px;">Website Hosting</h3>
               <p style="color:#888;font-size:12px;max-width:900px;">Host login/static pages from the configured website folder and deploy updates from there.</p>
               <button class="btn" onclick="ensureOpsFolders()">Create/Verify Root + Website Folders</button>
               <button class="btn" onclick="openOpsWebsiteFolder()">Open Website Folder</button>
               <button class="btn success" onclick="deployOpsWebsite()">Deploy Website Folder</button>
+              <h3 style="margin-top:16px;">Offline-First Sync Policy</h3>
+              <p style="color:#888;font-size:12px;max-width:900px;">Recommended for off-grid operation: save locally while server is offline, then sync when connectivity returns.</p>
+              <button class="btn" onclick="openOfflineSyncGuide()">Open Sync Guide</button>
             </div>
             <div id="operations-hub-terminal-tab" style="display:none;">
               <h3>Server Service Terminal</h3>
@@ -310,6 +317,12 @@ function createWindow() {
               <button class="btn" onclick="checkOpsServices()">Check Service Status</button>
               <button class="btn success" onclick="startOpsServices()">Start Services</button>
               <button class="btn warning" onclick="stopOpsServices()">Stop Services</button>
+              <hr style="border-color:#333;margin:14px 0;">
+              <h3>Database Backup / Restore</h3>
+              <p style="color:#888;font-size:12px;max-width:900px;">Create timestamped SQL backups and restore from a selected backup file.</p>
+              <button class="btn success" onclick="createOpsDatabaseBackup()">Create Backup</button>
+              <button class="btn warning" onclick="restoreOpsDatabaseBackup()">Restore Backup</button>
+              <div id="ops-backup-status" class="build-settings-status"></div>
               <hr style="border-color:#333;margin:14px 0;">
               <button class="btn success" onclick="startOpsTunnel()">Start/Restart Tunnel</button>
               <button class="btn warning" onclick="stopOpsTunnel()">Stop Tunnel</button>
@@ -716,8 +729,15 @@ function createWindow() {
       <script>
         const ipcRenderer = (() => {
           try {
-            if (typeof require !== 'function') return null;
-            const electron = require('electron');
+            if (typeof window !== 'undefined' && window.rrElectron && typeof window.rrElectron.invoke === 'function') {
+              return window.rrElectron;
+            }
+            const req =
+              (typeof require === 'function' && require) ||
+              (typeof window !== 'undefined' && typeof window.require === 'function' && window.require) ||
+              null;
+            if (!req) return null;
+            const electron = req('electron');
             return electron && electron.ipcRenderer ? electron.ipcRenderer : null;
           } catch {
             return null;
@@ -1613,6 +1633,68 @@ function createWindow() {
           setOpsStatus('Website deploy completed.', false);
         }
 
+        async function refreshOpsReliability() {
+          if (!ipcRenderer) return;
+          switchProjectToTerminal('operations-hub');
+          const result = await ipcRenderer.invoke('ops-health-dashboard');
+          const host = document.getElementById('ops-reliability-status');
+          if (!host) return;
+          if (!result || !result.ok) {
+            host.textContent = 'Reliability check failed: ' + (result && result.error ? result.error : 'Unknown error');
+            return;
+          }
+          host.innerHTML = [
+            'Node: ' + (result.nodeName || 'unknown'),
+            'MySQL service: ' + result.mysqlService,
+            'Tunnel service: ' + result.tunnelService,
+            'Free disk GB: ' + result.freeDiskGb,
+            'Backup files: ' + result.backupCount,
+            'Last backup: ' + (result.lastBackup || 'none'),
+          ].join('<br>');
+        }
+
+        async function createOpsDatabaseBackup() {
+          if (!ipcRenderer) return;
+          switchProjectToTerminal('operations-hub');
+          const result = await ipcRenderer.invoke('ops-create-db-backup');
+          const el = document.getElementById('ops-backup-status');
+          if (!el) return;
+          if (!result || !result.ok) {
+            el.textContent = result && result.error ? result.error : 'Backup failed.';
+            el.style.color = '#f28b82';
+            return;
+          }
+          el.textContent = 'Backup created: ' + result.path;
+          el.style.color = '#9cdcfe';
+        }
+
+        async function restoreOpsDatabaseBackup() {
+          if (!ipcRenderer) return;
+          switchProjectToTerminal('operations-hub');
+          const pick = await ipcRenderer.invoke('ops-pick-backup-file');
+          if (!pick || !pick.path) return;
+          const result = await ipcRenderer.invoke('ops-restore-db-backup', { path: pick.path });
+          const el = document.getElementById('ops-backup-status');
+          if (!el) return;
+          if (!result || !result.ok) {
+            el.textContent = result && result.error ? result.error : 'Restore failed.';
+            el.style.color = '#f28b82';
+            return;
+          }
+          el.textContent = 'Restore completed from: ' + pick.path;
+          el.style.color = '#9cdcfe';
+        }
+
+        async function openOfflineSyncGuide() {
+          if (!ipcRenderer) return;
+          const result = await ipcRenderer.invoke('ops-open-offline-sync-guide');
+          if (!result || !result.ok) {
+            setOpsStatus(result && result.error ? result.error : 'Could not open sync guide.', true);
+            return;
+          }
+          setOpsStatus('Opened offline sync guide.', false);
+        }
+
         async function checkDeveloperPanelUpdate() {
           if (!ipcRenderer) return;
           switchProjectToTerminal('operations-hub');
@@ -1687,6 +1769,10 @@ function createWindow() {
             ensureOpsFolders,
             openOpsWebsiteFolder,
             deployOpsWebsite,
+            refreshOpsReliability,
+            createOpsDatabaseBackup,
+            restoreOpsDatabaseBackup,
+            openOfflineSyncGuide,
             checkDeveloperPanelUpdate,
             applyDeveloperPanelUpdate,
             applyServerDbSettingsToMySqlPage,
@@ -1753,6 +1839,12 @@ function createWindow() {
         loadMachineSettings();
         loadOpsRemoteProfile();
         loadMySqlLocalConfig();
+        if (!ipcRenderer) {
+          const warn = document.createElement('div');
+          warn.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;background:#5a1a1a;color:#ffd6d6;padding:10px;border:1px solid #a33;z-index:9999;font-size:12px;';
+          warn.textContent = 'Developer Panel could not initialize Electron IPC. Buttons that run server actions will not work in this session.';
+          document.body.appendChild(warn);
+        }
       </script>
     </body>
     </html>
@@ -2167,6 +2259,22 @@ function writeOpsProfileToEnv(profile) {
 function runLocalOpsCommand(sender, command, banner) {
   const child = spawn(command, [], { stdio: 'pipe', shell: true });
   return streamChildToTerminal(sender, 'operations-hub', child, banner || null);
+}
+
+function runLocalOpsCommandCollect(command) {
+  return new Promise((resolve) => {
+    const child = spawn(command, [], { stdio: 'pipe', shell: true });
+    let out = '';
+    let err = '';
+    child.stdout.on('data', (d) => {
+      out += d.toString();
+    });
+    child.stderr.on('data', (d) => {
+      err += d.toString();
+    });
+    child.on('error', (e) => resolve({ code: -1, out, err: err + e.message }));
+    child.on('close', (code) => resolve({ code: code ?? 0, out, err }));
+  });
 }
 
 function parseVersionParts(v) {
@@ -2704,6 +2812,101 @@ ipcMain.handle('ops-deploy-website-folder', async (event) => {
       shell: true,
     });
     await streamChildToTerminal(event.sender, 'operations-hub', child, '$ npx wrangler pages deploy\n');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-health-dashboard', async (event) => {
+  try {
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    const backupDir = path.join(profile.rootFolder, 'backups');
+    const files = fs.existsSync(backupDir) ? fs.readdirSync(backupDir).filter((f) => /\.sql$/i.test(f)) : [];
+    let freeDiskGb = 'unknown';
+    if (process.platform === 'win32') {
+      const drive = (profile.rootFolder || 'E:\\').slice(0, 2);
+      const disk = await runLocalOpsCommandCollect(`powershell -NoProfile -Command "(Get-PSDrive -Name '${drive[0]}').Free"`);
+      if (disk.code === 0) {
+        const bytes = parseFloat(String(disk.out || '').trim());
+        if (Number.isFinite(bytes)) freeDiskGb = (bytes / (1024 ** 3)).toFixed(2);
+      }
+    }
+    const mysql = await runLocalOpsCommandCollect('sc query MySQL80');
+    const tunnel = await runLocalOpsCommandCollect('sc query RootRecordCloudflared');
+    sendTerminalChunk(event.sender, 'operations-hub', '$ health dashboard\n');
+    return {
+      ok: true,
+      nodeName: profile.nodeName || '',
+      mysqlService: /RUNNING/i.test(mysql.out) ? 'RUNNING' : 'NOT RUNNING',
+      tunnelService: /RUNNING/i.test(tunnel.out) ? 'RUNNING' : 'NOT RUNNING',
+      freeDiskGb,
+      backupCount: files.length,
+      lastBackup: files.length ? files.sort().slice(-1)[0] : '',
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-create-db-backup', async (event) => {
+  try {
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    const backupDir = path.join(profile.rootFolder, 'backups');
+    fs.mkdirSync(backupDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outPath = path.join(backupDir, `rootrecord-${stamp}.sql`);
+    const cmd = process.platform === 'win32'
+      ? `mysqldump -h "${profile.dbHost}" -P ${profile.dbPort} -u "${profile.dbUser}" -p"${profile.dbPassword}" "${profile.dbName}" > "${outPath}"`
+      : `mysqldump -h "${profile.dbHost}" -P ${profile.dbPort} -u "${profile.dbUser}" -p"${profile.dbPassword}" "${profile.dbName}" > "${outPath}"`;
+    const { code } = await runLocalOpsCommand(event.sender, cmd, '$ create db backup\n');
+    return code === 0 ? { ok: true, path: outPath } : { ok: false, error: `Backup exited ${code}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-pick-backup-file', async () => {
+  if (!mainWindow) return null;
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select SQL backup file',
+    properties: ['openFile'],
+    filters: [{ name: 'SQL Backup', extensions: ['sql'] }],
+  });
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return null;
+  return { path: r.filePaths[0] };
+});
+
+ipcMain.handle('ops-restore-db-backup', async (event, payload) => {
+  try {
+    const backupPath = payload && payload.path ? String(payload.path) : '';
+    if (!backupPath || !fs.existsSync(backupPath)) return { ok: false, error: 'Backup file not found.' };
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    const cmd = process.platform === 'win32'
+      ? `mysql -h "${profile.dbHost}" -P ${profile.dbPort} -u "${profile.dbUser}" -p"${profile.dbPassword}" "${profile.dbName}" < "${backupPath}"`
+      : `mysql -h "${profile.dbHost}" -P ${profile.dbPort} -u "${profile.dbUser}" -p"${profile.dbPassword}" "${profile.dbName}" < "${backupPath}"`;
+    const { code } = await runLocalOpsCommand(event.sender, cmd, '$ restore db backup\n');
+    return code === 0 ? { ok: true } : { ok: false, error: `Restore exited ${code}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-open-offline-sync-guide', async () => {
+  try {
+    const fp = path.join(__dirname, '..', 'docs', 'offline-first-sync-guide.md');
+    const { shell } = require('electron');
+    if (!fs.existsSync(fp)) return { ok: false, error: `Guide not found: ${fp}` };
+    await shell.openPath(fp);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message };
