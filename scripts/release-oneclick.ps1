@@ -21,10 +21,10 @@ function Replace-First([string]$text, [string]$pattern, [string]$replacement) {
   return $regex.Replace($text, $replacement, 1)
 }
 
-function Invoke-Gh([string[]]$Args) {
-  & gh @Args
+function Invoke-Gh([string[]]$GhArgs) {
+  & gh @GhArgs
   if ($LASTEXITCODE -ne 0) {
-    throw ("gh " + ($Args -join " ") + " failed with exit code " + $LASTEXITCODE)
+    throw ("gh " + ($GhArgs -join " ") + " failed with exit code " + $LASTEXITCODE)
   }
 }
 
