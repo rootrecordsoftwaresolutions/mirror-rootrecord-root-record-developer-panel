@@ -1,0 +1,34 @@
+{
+  "name": "root-record-developer-panel",
+  "version": "1.0.0",
+  "description": "Developer panel for building, signing, and managing Root Record applications",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "node scripts/build-windows.cjs",
+    "build:installer": "node scripts/build-installer.cjs"
+  },
+  "keywords": [
+    "electron",
+    "developer",
+    "build",
+    "sign",
+    "github"
+  ],
+  "author": "Root Record Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-packager": "^17.1.1",
+    "electron-winstaller": "^5.4.0"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "mysql2": "^3.22.1",
+    "node-pty": "^1.0.0",
+    "simple-git": "^3.20.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  }
+}

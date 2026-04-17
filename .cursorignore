@@ -1,0 +1,3 @@
+﻿# Packager output + deps — fewer handles on paths npm/electron-packager replace during rebuild.
+dist/
+node_modules/
