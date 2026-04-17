@@ -75,6 +75,11 @@ async function main() {
     arch: 'x64',
     out: outDir,
     overwrite: true,
+    ignore: [
+      /^\/dist-installer($|\/)/,
+      /^\/dist\/RootRecordDeveloperPanel-win32-x64\.rr-old-.*/,
+      /^\/dist\/\.rr-staging-.*/,
+    ],
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
   });
   const built = paths && paths[0];
