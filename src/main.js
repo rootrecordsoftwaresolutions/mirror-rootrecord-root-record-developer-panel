@@ -51,9 +51,8 @@ function createWindow() {
     width: 1600,
     height: 1000,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: true,
+      contextIsolation: false,
     },
     title: 'Root Record Developer Panel'
   });
@@ -127,16 +126,16 @@ function createWindow() {
         <div class="sidebar">
           <h2>Projects</h2>
           <div id="projectList">
-            <div class="project" data-page-target="business-manager"><strong>📊 Business Manager</strong><br><small>Business management app</small></div>
-            <div class="project" data-page-target="energy-manager"><strong>⚡ Energy Manager</strong><br><small>Energy monitoring app</small></div>
-            <div class="project" data-page-target="homestead-manager"><strong>🏡 Homestead Manager</strong><br><small>Homestead management app</small></div>
-            <div class="project" data-page-target="weather-manager"><strong>🌦️ Weather Manager</strong><br><small>Weather and alert intelligence app</small></div>
-            <div class="project" data-page-target="website"><strong>🌐 Website</strong><br><small>Public website</small></div>
-            <div class="project" data-page-target="mysql-local"><strong>🗄️ MySQL Local</strong><br><small>Database editing tools</small></div>
+            <div class="project" data-page-target="business-manager" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('business-manager-page');if(x)x.classList.add('active')})()"><strong>📊 Business Manager</strong><br><small>Business management app</small></div>
+            <div class="project" data-page-target="energy-manager" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('energy-manager-page');if(x)x.classList.add('active')})()"><strong>⚡ Energy Manager</strong><br><small>Energy monitoring app</small></div>
+            <div class="project" data-page-target="homestead-manager" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('homestead-manager-page');if(x)x.classList.add('active')})()"><strong>🏡 Homestead Manager</strong><br><small>Homestead management app</small></div>
+            <div class="project" data-page-target="weather-manager" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('weather-manager-page');if(x)x.classList.add('active')})()"><strong>🌦️ Weather Manager</strong><br><small>Weather and alert intelligence app</small></div>
+            <div class="project" data-page-target="website" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('website-page');if(x)x.classList.add('active')})()"><strong>🌐 Website</strong><br><small>Public website</small></div>
+            <div class="project" data-page-target="mysql-local" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('mysql-local-page');if(x)x.classList.add('active')})()"><strong>🗄️ MySQL Local</strong><br><small>Database editing tools</small></div>
           </div>
           <hr style="margin: 20px 0; border-color: #333;">
-          <button class="btn" data-page-target="dashboard" style="width: 100%;">🏠 Dashboard</button>
-          <button class="btn" data-page-target="operations-hub" style="width: 100%; margin-top: 8px;">🔧 Operations hub</button>
+          <button class="btn" data-page-target="dashboard" style="width: 100%;" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('dashboard-page');if(x)x.classList.add('active')})()">🏠 Dashboard</button>
+          <button class="btn" data-page-target="operations-hub" style="width: 100%; margin-top: 8px;" onclick="(function(){document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active')});var x=document.getElementById('operations-hub-page');if(x)x.classList.add('active')})()">🔧 Operations hub</button>
         </div>
         <div class="main">
           <!-- Dashboard Page -->
@@ -729,15 +728,8 @@ function createWindow() {
       <script>
         const ipcRenderer = (() => {
           try {
-            if (typeof window !== 'undefined' && window.rrElectron && typeof window.rrElectron.invoke === 'function') {
-              return window.rrElectron;
-            }
-            const req =
-              (typeof require === 'function' && require) ||
-              (typeof window !== 'undefined' && typeof window.require === 'function' && window.require) ||
-              null;
-            if (!req) return null;
-            const electron = req('electron');
+            if (typeof require !== 'function') return null;
+            const electron = require('electron');
             return electron && electron.ipcRenderer ? electron.ipcRenderer : null;
           } catch {
             return null;
@@ -1839,6 +1831,16 @@ function createWindow() {
         loadMachineSettings();
         loadOpsRemoteProfile();
         loadMySqlLocalConfig();
+        window.addEventListener('error', (evt) => {
+          try {
+            const err = document.createElement('div');
+            err.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;background:#5a1a1a;color:#ffd6d6;padding:10px;border:1px solid #a33;z-index:9999;font-size:12px;';
+            err.textContent = 'Runtime error: ' + (evt && evt.message ? evt.message : 'Unknown error');
+            document.body.appendChild(err);
+          } catch {
+            /* ignore */
+          }
+        });
         if (!ipcRenderer) {
           const warn = document.createElement('div');
           warn.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;background:#5a1a1a;color:#ffd6d6;padding:10px;border:1px solid #a33;z-index:9999;font-size:12px;';
