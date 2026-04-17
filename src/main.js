@@ -256,8 +256,16 @@ function createWindow() {
                 <input id="ops-install-root" class="build-settings-path" placeholder="E:\\">
               </div>
               <div class="build-settings-field">
+                <label for="ops-root-folder">Central Root Folder</label>
+                <input id="ops-root-folder" class="build-settings-path" placeholder="E:\\rootrecord">
+              </div>
+              <div class="build-settings-field">
                 <label for="ops-db-data-dir">MySQL Data Directory</label>
                 <input id="ops-db-data-dir" class="build-settings-path" placeholder="E:\\database">
+              </div>
+              <div class="build-settings-field">
+                <label for="ops-website-dir">Website Folder</label>
+                <input id="ops-website-dir" class="build-settings-path" placeholder="E:\\website">
               </div>
               <h3 style="margin-top:18px;">App Update Source</h3>
               <div class="build-settings-field">
@@ -280,6 +288,11 @@ function createWindow() {
               <p style="color:#888;font-size:12px;max-width:900px;">Ensures this server has MySQL + cloudflared available so your other apps can connect to one stable data node.</p>
               <button class="btn success" onclick="installOpsRemoteDependencies()">Install/Upgrade Dependencies</button>
               <button class="btn" onclick="checkOpsRemoteDependencies()">Check Dependency Status</button>
+              <h3 style="margin-top:16px;">Website Hosting</h3>
+              <p style="color:#888;font-size:12px;max-width:900px;">Host login/static pages from the configured website folder and deploy updates from there.</p>
+              <button class="btn" onclick="ensureOpsFolders()">Create/Verify Root + Website Folders</button>
+              <button class="btn" onclick="openOpsWebsiteFolder()">Open Website Folder</button>
+              <button class="btn success" onclick="deployOpsWebsite()">Deploy Website Folder</button>
             </div>
             <div id="operations-hub-terminal-tab" style="display:none;">
               <h3>Server Service Terminal</h3>
@@ -1368,7 +1381,9 @@ function createWindow() {
             dbName: (document.getElementById('ops-db-name') || {}).value || '',
             publicDbHost: (document.getElementById('ops-db-public-host') || {}).value || '',
             installRoot: (document.getElementById('ops-install-root') || {}).value || '',
+            rootFolder: (document.getElementById('ops-root-folder') || {}).value || '',
             dbDataDir: (document.getElementById('ops-db-data-dir') || {}).value || '',
+            websiteDir: (document.getElementById('ops-website-dir') || {}).value || '',
             updateRepo: (document.getElementById('ops-update-repo') || {}).value || '',
             updateToken: (document.getElementById('ops-update-token') || {}).value || '',
           };
@@ -1394,7 +1409,9 @@ function createWindow() {
           const dbNameEl = document.getElementById('ops-db-name');
           const publicHostEl = document.getElementById('ops-db-public-host');
           const installRootEl = document.getElementById('ops-install-root');
+          const rootFolderEl = document.getElementById('ops-root-folder');
           const dbDataDirEl = document.getElementById('ops-db-data-dir');
+          const websiteDirEl = document.getElementById('ops-website-dir');
           const updateRepoEl = document.getElementById('ops-update-repo');
           const updateTokenEl = document.getElementById('ops-update-token');
           if (nodeEl) nodeEl.value = cfg.nodeName || '';
@@ -1406,7 +1423,9 @@ function createWindow() {
           if (dbNameEl) dbNameEl.value = cfg.dbName || '';
           if (publicHostEl) publicHostEl.value = cfg.publicDbHost || '';
           if (installRootEl) installRootEl.value = cfg.installRoot || 'E:\\';
+          if (rootFolderEl) rootFolderEl.value = cfg.rootFolder || 'E:\\rootrecord';
           if (dbDataDirEl) dbDataDirEl.value = cfg.dbDataDir || 'E:\\database';
+          if (websiteDirEl) websiteDirEl.value = cfg.websiteDir || 'E:\\website';
           if (updateRepoEl) updateRepoEl.value = cfg.updateRepo || '';
           if (updateTokenEl) updateTokenEl.value = cfg.updateToken || '';
         }
@@ -1562,6 +1581,38 @@ function createWindow() {
           setOpsStatus('Stop services command sent.', false);
         }
 
+        async function ensureOpsFolders() {
+          if (!ipcRenderer) return;
+          switchProjectToTerminal('operations-hub');
+          const result = await ipcRenderer.invoke('ops-ensure-folders');
+          if (!result || !result.ok) {
+            setOpsStatus(result && result.error ? result.error : 'Folder setup failed.', true);
+            return;
+          }
+          setOpsStatus('Root/website folders verified.', false);
+        }
+
+        async function openOpsWebsiteFolder() {
+          if (!ipcRenderer) return;
+          const result = await ipcRenderer.invoke('ops-open-website-folder');
+          if (!result || !result.ok) {
+            setOpsStatus(result && result.error ? result.error : 'Open website folder failed.', true);
+            return;
+          }
+          setOpsStatus('Website folder opened.', false);
+        }
+
+        async function deployOpsWebsite() {
+          if (!ipcRenderer) return;
+          switchProjectToTerminal('operations-hub');
+          const result = await ipcRenderer.invoke('ops-deploy-website-folder');
+          if (!result || !result.ok) {
+            setOpsStatus(result && result.error ? result.error : 'Website deploy failed.', true);
+            return;
+          }
+          setOpsStatus('Website deploy completed.', false);
+        }
+
         async function checkDeveloperPanelUpdate() {
           if (!ipcRenderer) return;
           switchProjectToTerminal('operations-hub');
@@ -1633,6 +1684,9 @@ function createWindow() {
             checkOpsServices,
             startOpsServices,
             stopOpsServices,
+            ensureOpsFolders,
+            openOpsWebsiteFolder,
+            deployOpsWebsite,
             checkDeveloperPanelUpdate,
             applyDeveloperPanelUpdate,
             applyServerDbSettingsToMySqlPage,
@@ -1987,7 +2041,9 @@ function normalizeOpsRemoteProfile(raw) {
     dbName: String(p.dbName || '').trim(),
     publicDbHost: String(p.publicDbHost || '').trim(),
     installRoot: String(p.installRoot || 'E:\\').trim() || 'E:\\',
+    rootFolder: String(p.rootFolder || 'E:\\rootrecord').trim() || 'E:\\rootrecord',
     dbDataDir: String(p.dbDataDir || 'E:\\database').trim() || 'E:\\database',
+    websiteDir: String(p.websiteDir || 'E:\\website').trim() || 'E:\\website',
     updateRepo: String(p.updateRepo || '').trim(),
     updateToken: String(p.updateToken || ''),
   };
@@ -2052,7 +2108,9 @@ function readOpsProfileFromEnv() {
     publicDbHost: env.ROOTRECORD_DB_PUBLIC_HOST || '',
     tunnelToken: env.ROOTRECORD_CLOUDFLARED_TOKEN || '',
     installRoot: env.ROOTRECORD_INSTALL_ROOT || 'E:\\',
+    rootFolder: env.ROOTRECORD_ROOT_FOLDER || 'E:\\rootrecord',
     dbDataDir: env.ROOTRECORD_DB_DATA_DIR || env.MYSQL_DATADIR || 'E:\\database',
+    websiteDir: env.ROOTRECORD_WEBSITE_DIR || 'E:\\website',
     updateRepo: env.ROOTRECORD_UPDATE_REPO || '',
     updateToken: env.ROOTRECORD_GITHUB_TOKEN || '',
   });
@@ -2071,7 +2129,9 @@ function writeOpsProfileToEnv(profile) {
     ROOTRECORD_DB_PUBLIC_HOST: String(profile.publicDbHost || ''),
     ROOTRECORD_CLOUDFLARED_TOKEN: String(profile.tunnelToken || ''),
     ROOTRECORD_INSTALL_ROOT: String(profile.installRoot || 'E:\\'),
+    ROOTRECORD_ROOT_FOLDER: String(profile.rootFolder || 'E:\\rootrecord'),
     ROOTRECORD_DB_DATA_DIR: String(profile.dbDataDir || 'E:\\database'),
+    ROOTRECORD_WEBSITE_DIR: String(profile.websiteDir || 'E:\\website'),
     ROOTRECORD_UPDATE_REPO: String(profile.updateRepo || ''),
     ROOTRECORD_GITHUB_TOKEN: String(profile.updateToken || ''),
   };
@@ -2087,7 +2147,9 @@ function writeOpsProfileToEnv(profile) {
   lines.push(`ROOTRECORD_DB_PUBLIC_HOST=${stringifyEnvValue(next.ROOTRECORD_DB_PUBLIC_HOST)}`);
   lines.push(`ROOTRECORD_CLOUDFLARED_TOKEN=${stringifyEnvValue(next.ROOTRECORD_CLOUDFLARED_TOKEN)}`);
   lines.push(`ROOTRECORD_INSTALL_ROOT=${stringifyEnvValue(next.ROOTRECORD_INSTALL_ROOT)}`);
+  lines.push(`ROOTRECORD_ROOT_FOLDER=${stringifyEnvValue(next.ROOTRECORD_ROOT_FOLDER)}`);
   lines.push(`ROOTRECORD_DB_DATA_DIR=${stringifyEnvValue(next.ROOTRECORD_DB_DATA_DIR)}`);
+  lines.push(`ROOTRECORD_WEBSITE_DIR=${stringifyEnvValue(next.ROOTRECORD_WEBSITE_DIR)}`);
   lines.push(`ROOTRECORD_UPDATE_REPO=${stringifyEnvValue(next.ROOTRECORD_UPDATE_REPO)}`);
   lines.push(`ROOTRECORD_GITHUB_TOKEN=${stringifyEnvValue(next.ROOTRECORD_GITHUB_TOKEN)}`);
     if (next.MYSQL_DATADIR == null || String(next.MYSQL_DATADIR).trim() === '') {
@@ -2577,6 +2639,72 @@ ipcMain.handle('ops-install-remote-dependencies', async (event) => {
         ].join(' ');
     const { code } = await runLocalOpsCommand(event.sender, cmd, '$ install dependencies\n');
     return code === 0 ? { ok: true } : { ok: false, error: `Dependency install exited ${code}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-ensure-folders', async (event) => {
+  try {
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    const cmd = process.platform === 'win32'
+      ? [
+          `if not exist "${profile.rootFolder}" mkdir "${profile.rootFolder}"`,
+          `if not exist "${profile.websiteDir}" mkdir "${profile.websiteDir}"`,
+          `if not exist "${profile.dbDataDir}" mkdir "${profile.dbDataDir}"`,
+          `echo root folder: ${profile.rootFolder}`,
+          `echo website folder: ${profile.websiteDir}`,
+          `echo db data dir: ${profile.dbDataDir}`,
+        ].join(' & ')
+      : [
+          `mkdir -p "${profile.rootFolder}"`,
+          `mkdir -p "${profile.websiteDir}"`,
+          `mkdir -p "${profile.dbDataDir}"`,
+          `echo "root folder: ${profile.rootFolder}"`,
+          `echo "website folder: ${profile.websiteDir}"`,
+          `echo "db data dir: ${profile.dbDataDir}"`,
+        ].join('; ');
+    const { code } = await runLocalOpsCommand(event.sender, cmd, '$ ensure folders\n');
+    return code === 0 ? { ok: true } : { ok: false, error: `Ensure folders exited ${code}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-open-website-folder', async (event) => {
+  try {
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    fs.mkdirSync(profile.websiteDir, { recursive: true });
+    const { shell } = require('electron');
+    await shell.openPath(profile.websiteDir);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+
+ipcMain.handle('ops-deploy-website-folder', async (event) => {
+  try {
+    const profile = normalizeOpsRemoteProfile({
+      ...store.get(OPS_REMOTE_PROFILE_KEY, {}),
+      ...readOpsProfileFromEnv(),
+    });
+    if (!fs.existsSync(profile.websiteDir)) {
+      return { ok: false, error: `Website folder does not exist: ${profile.websiteDir}` };
+    }
+    const child = spawn('npx', ['wrangler', 'pages', 'deploy', profile.websiteDir], {
+      cwd: profile.websiteDir,
+      stdio: 'pipe',
+      shell: true,
+    });
+    await streamChildToTerminal(event.sender, 'operations-hub', child, '$ npx wrangler pages deploy\n');
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: error.message };
   }
