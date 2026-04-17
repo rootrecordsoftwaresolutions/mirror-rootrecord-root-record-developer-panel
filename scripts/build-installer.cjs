@@ -30,7 +30,6 @@ function runBuildWindows() {
 async function main() {
   await runBuildWindows();
   fs.rmSync(shortWorkRoot, { recursive: true, force: true });
-  fs.rmSync(installerOutDir, { recursive: true, force: true });
   fs.mkdirSync(shortWorkRoot, { recursive: true });
   fs.cpSync(packedDir, shortAppDir, { recursive: true });
   await createWindowsInstaller({
@@ -41,12 +40,22 @@ async function main() {
     noMsi: true,
   });
   fs.mkdirSync(installerOutDir, { recursive: true });
-  fs.copyFileSync(
-    path.join(shortOutDir, 'RootRecordDeveloperPanelSetup.exe'),
-    path.join(installerOutDir, 'RootRecordDeveloperPanelSetup.exe')
-  );
+  const srcSetup = path.join(shortOutDir, 'RootRecordDeveloperPanelSetup.exe');
+  const defaultDest = path.join(installerOutDir, 'RootRecordDeveloperPanelSetup.exe');
+  let finalDest = defaultDest;
+  try {
+    fs.copyFileSync(srcSetup, defaultDest);
+  } catch (err) {
+    if (err && err.code === 'EBUSY') {
+      const stamp = Date.now().toString(36);
+      finalDest = path.join(installerOutDir, `RootRecordDeveloperPanelSetup-${stamp}.exe`);
+      fs.copyFileSync(srcSetup, finalDest);
+    } else {
+      throw err;
+    }
+  }
   console.log('[installer] Done.');
-  console.log(`[installer] Setup exe: ${path.join(installerOutDir, 'RootRecordDeveloperPanelSetup.exe')}`);
+  console.log(`[installer] Setup exe: ${finalDest}`);
 }
 
 main().catch((err) => {
